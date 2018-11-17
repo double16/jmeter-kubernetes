@@ -1,0 +1,69 @@
+version: 2
+jobs:
+  build:
+    working_directory: /home/build
+    docker:
+      - image: circleci/buildpack-deps:bionic-curl
+        user: root
+
+    steps:
+      - checkout
+
+      - setup_remote_docker
+
+      - restore_cache:
+          keys:
+            - v1-{{ .Branch }}-{{ .Revision }}
+            - v1-{{ .Branch }}-
+            - v1-
+
+      - run:
+          name: Restore Docker Public Image Cache
+          command: |
+            set -x
+            if [[ -s /home/build/cache/docker/image.tar.gz ]]; then
+              zcat /home/build/cache/docker/image.tar.gz | docker load
+            fi
+
+      - run:
+          name: docker.io login
+          command: |
+            set -e
+            docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" docker.io
+
+      - run:
+          name: Docker Build
+          command: |
+            docker build --tag="pdouble16/jmeter-base:${CIRCLE_TAG:-latest}" -f Dockerfile-base .
+            docker build --tag="pdouble16/jmeter-master:${CIRCLE_TAG:-latest}" -f Dockerfile-master .
+            docker build --tag="pdouble16/jmeter-slave:${CIRCLE_TAG:-latest}" -f Dockerfile-slave .
+            docker build --tag="pdouble16/jmeter-reporter:${CIRCLE_TAG:-latest}" -f Dockerfile-reporter .
+
+      - run:
+          name: Push
+          command: |
+            set -e
+            docker push pdouble16/jmeter-base:${CIRCLE_TAG:-latest}
+            docker push pdouble16/jmeter-master:${CIRCLE_TAG:-latest}
+            docker push pdouble16/jmeter-slave:${CIRCLE_TAG:-latest}
+            docker push pdouble16/jmeter-reporter:${CIRCLE_TAG:-latest}
+
+      - run:
+          name: Build Docker Public Image Cache
+          no_output_timeout: 31m
+          command: |
+            set -x
+            mkdir -p /home/build/cache/docker
+            docker images --format '{{.Repository}}:{{.Tag}}' | grep -v "pdouble16/jmeter\|:<none>" | xargs -r docker save | gzip -9 > /home/build/cache/docker/image.tar.gz
+
+      - save_cache:
+          key: v1-{{ .Branch }}-{{ .Revision }}
+          paths:
+            - /home/build/cache/docker
+
+# https://discuss.circleci.com/t/git-tag-deploys-in-2-0/9493/6
+deployment:
+  fake_deploy_for_cci2:
+    tag: /.*/
+    commands:
+      - echo "make tags run in 2.0"
