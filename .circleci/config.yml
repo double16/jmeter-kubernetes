@@ -33,6 +33,7 @@ jobs:
       - run:
           name: Docker Build
           command: |
+            sed -i -e "s;kubernautslabs/jmeter-base:latest;pdouble16/jmeter-base:${CIRCLE_TAG:-latest};g" Dockerfile-*
             docker build --tag="pdouble16/jmeter-base:${CIRCLE_TAG:-latest}" -f Dockerfile-base .
             docker build --tag="pdouble16/jmeter-master:${CIRCLE_TAG:-latest}" -f Dockerfile-master .
             docker build --tag="pdouble16/jmeter-slave:${CIRCLE_TAG:-latest}" -f Dockerfile-slave .
